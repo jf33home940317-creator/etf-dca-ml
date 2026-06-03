@@ -45,7 +45,14 @@ def equity_curve_from_trades(trades: list, prices: pd.DataFrame) -> pd.Series:
 
 
 def summary_stats(equity: pd.Series) -> dict:
-    ret = equity.pct_change().dropna()
+    # Restrict to the period after equity first becomes positive so the
+    # zero -> positive jump on the first trade does not produce inf pct_change.
+    positive = equity[equity > 0]
+    if len(positive) == 0:
+        return {"total_return": 0.0, "cagr": 0.0, "sharpe": 0.0,
+                "max_dd": 0.0, "calmar": 0.0}
+    equity = equity.loc[positive.index[0]:]
+    ret = equity.pct_change().replace([np.inf, -np.inf], np.nan).dropna()
     total_return = equity.iloc[-1] / equity[equity > 0].iloc[0] - 1 if (equity > 0).any() else 0.0
     years = max((equity.index[-1] - equity.index[0]).days / 365.25, 1e-6)
     cagr = (1 + total_return) ** (1 / years) - 1 if total_return > -1 else -1
