@@ -1,0 +1,25 @@
+# config.py
+import os
+from pathlib import Path
+
+ROOT = Path(__file__).parent
+STORAGE = ROOT / "storage"
+STORAGE_RAW = STORAGE / "raw"
+STORAGE_LIVE = STORAGE / "live"
+STORAGE_MODELS = STORAGE / "models"
+
+DCA_SYMBOLS = ["SPY", "QQQ", "0050.TW"]
+MACRO_TICKERS = ["^VIX", "^TNX", "DX-Y.NYB", "SMH"]
+
+MONTHLY_BUDGET = {"SPY": 1000.0, "QQQ": 1000.0, "0050.TW": 30000.0}
+SIGNAL_THRESHOLD = {"SPY": 0.55, "QQQ": 0.55, "0050.TW": 0.55}
+
+MAX_PER_TRADE_RATIO = 0.25
+HISTORY_START = "2005-01-01"
+
+LABEL_WINDOW = 30
+LABEL_TOP_Q = 0.20
+PURGE_GAP_DAYS = 20
+
+DISCORD_WEBHOOK_URL = os.environ.get("DCA_DISCORD_WEBHOOK", "")
+TZ = "Asia/Taipei"

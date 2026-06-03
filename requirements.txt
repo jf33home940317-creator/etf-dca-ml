@@ -1,0 +1,8 @@
+yfinance>=0.2.40
+pandas>=2.1
+numpy>=1.26
+xgboost>=2.0
+scikit-learn>=1.4
+requests>=2.31
+pytest>=8.0
+joblib>=1.3
