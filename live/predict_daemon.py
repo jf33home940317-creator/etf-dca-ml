@@ -2,10 +2,11 @@ import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import pandas as pd
+from pandas.tseries.offsets import BDay
 
 import config
 from data.fetcher import fetch_and_cache
-from data.cleaner import drop_invalid, is_last_trading_day_of_month
+from data.cleaner import drop_invalid
 from features.macro import build_macro_frame
 from features.builder import build_features_for_symbol, FEATURE_COLS
 from models.trainer import load_model
@@ -57,6 +58,27 @@ def _reason_zh(reason: str | None) -> str:
     return {"BUY": "進場", "FORCED_BUY": "月底強制"}.get(reason, reason or "")
 
 
+def _is_calendar_month_last_business_day(today: pd.Timestamp) -> bool:
+    """Live-mode month-end check.
+
+    Spec §2.2 says "FORCED_BUY on the last trading day of the month for this
+    symbol". In backtest the historical df spans multiple months so
+    data.cleaner.is_last_trading_day_of_month works (it compares against the
+    max same-month bar). In live, the df is truncated at today, so that
+    function would return True every day and drain the budget on every run.
+
+    The pragmatic live-mode check: today is Mon-Fri AND the next business day
+    is in the next calendar month. Misses the rare case where the actual last
+    trading day is a Thursday because Friday is a market holiday — that month
+    just won't see a forced buy, and the 1st-of-month retrain resets budget
+    anyway, so the worst-case cost is one missed forced buy per such month.
+    """
+    today = pd.Timestamp(today).normalize()
+    if today.dayofweek >= 5:
+        return False
+    return (today + BDay(1)).month != today.month
+
+
 def run_once():
     today_utc = datetime.now(timezone.utc).date()
     print(f"[predict_daemon] starting {today_utc.isoformat()}")
@@ -88,7 +110,12 @@ def run_once():
                 update_budget(BUDGET_STATE, symbol, budget_left)
 
             today_idx = latest.index[-1]
-            is_last = is_last_trading_day_of_month(sym_df, today_idx)
+            # Use calendar-based check for live (the sym_df-based check in
+            # data.cleaner is correct for backtest but degenerates to "every
+            # day is the last bar of its month" in live mode).
+            is_last = _is_calendar_month_last_business_day(
+                pd.Timestamp(datetime.now(timezone.utc).date())
+            )
             action = decide_action(
                 symbol=symbol, prob=prob,
                 threshold=config.SIGNAL_THRESHOLD[symbol],

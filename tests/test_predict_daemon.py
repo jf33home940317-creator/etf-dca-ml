@@ -1,7 +1,7 @@
 from unittest.mock import patch, MagicMock
 import numpy as np
 import pandas as pd
-from live.predict_daemon import decide_action
+from live.predict_daemon import decide_action, _is_calendar_month_last_business_day
 
 
 class FakeModel:
@@ -40,3 +40,25 @@ def test_decide_action_forces_buy_on_last_day():
     assert action["reason"] == "FORCED_BUY"
     assert action["amount"] == 750.0
     assert action["new_budget"] == 0.0
+
+
+def test_calendar_last_bday_true_on_jan_31_2024_wed():
+    # 2024-01-31 is a Wednesday and the last business day of January.
+    assert _is_calendar_month_last_business_day(pd.Timestamp("2024-01-31")) is True
+
+
+def test_calendar_last_bday_false_on_jan_3_mid_month():
+    # 2024-01-03 (Wednesday) — clearly not last business day of Jan.
+    assert _is_calendar_month_last_business_day(pd.Timestamp("2024-01-03")) is False
+
+
+def test_calendar_last_bday_false_on_weekend():
+    # 2024-01-27 is a Saturday — not a business day.
+    assert _is_calendar_month_last_business_day(pd.Timestamp("2024-01-27")) is False
+
+
+def test_calendar_last_bday_true_on_last_friday_when_weekend_follows():
+    # 2024-02-29 was a Thursday — last business day of Feb (Mar 1 = Friday next month).
+    assert _is_calendar_month_last_business_day(pd.Timestamp("2024-02-29")) is True
+    # 2024-05-31 was a Friday — last business day of May (next bday = Mon Jun 3).
+    assert _is_calendar_month_last_business_day(pd.Timestamp("2024-05-31")) is True
