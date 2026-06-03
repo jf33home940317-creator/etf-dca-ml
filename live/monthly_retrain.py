@@ -19,7 +19,7 @@ def run_once():
     }
     macro_df = build_macro_frame(macro_raw)
 
-    lines = [f"✅ Monthly retrain {datetime.now(timezone.utc).date().isoformat()}"]
+    lines = [f"✅ 每月重訓 {datetime.now(timezone.utc).date().isoformat()}"]
     for symbol in config.DCA_SYMBOLS:
         try:
             sym_df = drop_invalid(fetch_and_cache(symbol))
@@ -28,12 +28,12 @@ def run_once():
             save_model(symbol, model, meta)
             auc = meta.get("cv_auc_mean")
             auc_str = f"{auc:.3f}" if auc is not None else "n/a"
-            lines.append(f"  {symbol}: n={meta['n_samples']} CV-AUC={auc_str}")
+            lines.append(f"  {symbol}: 樣本數={meta['n_samples']} CV-AUC={auc_str}")
         except Exception as e:
-            lines.append(f"  {symbol}: ❌ {e}")
+            lines.append(f"  {symbol}: ❌ 失敗: {e}")
 
     write_budget(BUDGET_STATE, dict(config.MONTHLY_BUDGET))
-    lines.append(f"💰 Budgets reset: {dict(config.MONTHLY_BUDGET)}")
+    lines.append(f"💰 預算重置: {dict(config.MONTHLY_BUDGET)}")
 
     msg = "\n".join(lines)
     print(msg)

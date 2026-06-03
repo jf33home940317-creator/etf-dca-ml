@@ -53,6 +53,10 @@ def _emoji(reason: str | None) -> str:
     return {"BUY": "🟢", "FORCED_BUY": "🔴"}.get(reason, "⚪")
 
 
+def _reason_zh(reason: str | None) -> str:
+    return {"BUY": "進場", "FORCED_BUY": "月底強制"}.get(reason, reason or "")
+
+
 def run_once():
     today_utc = datetime.now(timezone.utc).date()
     print(f"[predict_daemon] starting {today_utc.isoformat()}")
@@ -65,14 +69,14 @@ def run_once():
     }
     macro_df = build_macro_frame(macro_raw)
 
-    lines = [f"📅 {today_utc.isoformat()} ETF DCA Signals"]
+    lines = [f"📅 {today_utc.isoformat()} ETF 定投訊號"]
     for symbol in config.DCA_SYMBOLS:
         try:
             sym_df = _fetch_with_retry(symbol)
             feat = build_features_for_symbol(sym_df, macro_df)
             latest = feat.dropna(subset=FEATURE_COLS).iloc[[-1]]
             if len(latest) == 0:
-                lines.append(f"⚠️ {symbol} no feature row")
+                lines.append(f"⚠️ {symbol} 無特徵資料")
                 continue
 
             model, _ = load_model(symbol)
@@ -104,17 +108,17 @@ def run_once():
                 })
                 update_budget(BUDGET_STATE, symbol, action["new_budget"])
                 lines.append(
-                    f"{_emoji(action['reason'])} {symbol:<8} prob={prob:.2f} "
-                    f"{action['reason']} ${action['amount']:.0f} "
-                    f"(rem ${action['new_budget']:.0f})"
+                    f"{_emoji(action['reason'])} {symbol:<8} 機率={prob:.2f} "
+                    f"{_reason_zh(action['reason'])} ${action['amount']:.0f} "
+                    f"(剩餘 ${action['new_budget']:.0f})"
                 )
             else:
                 lines.append(
-                    f"⚪ {symbol:<8} prob={prob:.2f} no action "
-                    f"(rem ${budget_left:.0f})"
+                    f"⚪ {symbol:<8} 機率={prob:.2f} 觀望中 "
+                    f"(剩餘 ${budget_left:.0f})"
                 )
         except Exception as e:
-            lines.append(f"❌ {symbol} error: {e}")
+            lines.append(f"❌ {symbol} 錯誤: {e}")
 
     msg = "\n".join(lines)
     print(msg)

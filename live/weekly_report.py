@@ -18,14 +18,14 @@ def run_once():
         counts[s["symbol"]][s["reason"]] += 1
         amounts[s["symbol"]] += float(s["amount"])
 
-    lines = ["📊 Weekly DCA Report"]
+    lines = ["📊 每週定投報告"]
     for sym in config.DCA_SYMBOLS:
         bl = read_budget(BUDGET_STATE, sym)
         bl_str = f"${bl:.0f}" if bl is not None else "n/a"
         c = counts[sym]
         lines.append(
-            f"  {sym}: BUY={c.get('BUY', 0)} FORCED={c.get('FORCED_BUY', 0)} "
-            f"spent=${amounts[sym]:.0f} remaining={bl_str}"
+            f"  {sym}: 進場={c.get('BUY', 0)} 月底強制={c.get('FORCED_BUY', 0)} "
+            f"已花費=${amounts[sym]:.0f} 剩餘={bl_str}"
         )
     msg = "\n".join(lines)
     print(msg)
