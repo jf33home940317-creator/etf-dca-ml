@@ -328,3 +328,29 @@ Lopez de Prado-style null test: with config (purge=40, 24 features), shuffle the
 | **Gap (real − shuffled)** | **+0.1605** |
 
 Shuffled distribution sits squarely in the null band [0.49, 0.51]; the 0.66 in production is **real predictive signal** from RSI / MA distance / drawdown / VIX features, not a residual structural artifact. Cleared to proceed to Phase C (backtest + live).
+
+### 12.4 FORCED_BUY × bull-market interaction (cost-basis insight)
+
+Task 17 acceptance gate passed on the primary criterion (strategy Sharpe > both baselines on 3/3 symbols) but **failed** on the secondary criterion (`cost_basis_vs_monthly_mean` negative on aggregate). Per-symbol results at τ = 0.55:
+
+| Symbol | Strategy Sharpe | Cost basis vs monthly mean |
+|---|---:|---:|
+| SPY | 1.38 | +2.24% (premium) |
+| QQQ | 1.45 | +2.79% (premium) |
+| 0050.TW | 1.51 | **−3.04% (discount)** |
+
+A τ grid search [0.55, 0.60, 0.65, 0.70, 0.75] confirmed that **raising τ makes cost basis monotonically worse**, not better. SPY: 0.55→+2.17% / 0.60→+2.21% / 0.65→+2.26% / 0.70→+2.36% / 0.75→+2.62%. QQQ shows the same pattern; 0.75 also breaks the Sharpe gate.
+
+**Why higher τ hurts cost basis on SPY/QQQ:** the original intuition was "be more patient → wait for deeper dips → cheaper fills". That intuition is correct in **bear** months. In **bull** months the dynamic reverses:
+
+- Higher τ → model fires less often during the month → more leftover budget at month-end
+- `FORCED_BUY` on the last trading day drains all leftover budget at the last session's open
+- In a bull month the last session's open is typically near the **monthly high**
+- So the "patient" version spends a larger fraction of monthly budget at the worst price of the month
+
+Over a 2005–2026 sample dominated by bull years, this bull-month penalty outweighs the bear-month benefit. The +2-3% cost-basis premium on SPY/QQQ is structural — not a bug, but the cost of the `FORCED_BUY` rule on rising assets. 0050.TW escapes the penalty because TW market behaviour (heavier foreign selling pressure, sharper monthly mean reversion around 台積電 ADR moves) leaves more genuinely-cheap month-end days.
+
+**Implications for tuning:**
+- Threshold tuning alone cannot fix SPY/QQQ cost basis. The `FORCED_BUY` rule is the binding constraint.
+- Alternatives worth exploring (Phase 2): (1) split forced buy across the last *N* sessions instead of one shot; (2) lower `MAX_PER_TRADE_RATIO` from 0.25 to spread bullets thinner; (3) drop forced buy entirely on months where strategy signals were below a "very low" floor (model says "no edge anywhere this month" → don't force).
+- For now the strategy ships with `τ_QQQ = 0.60` (best grid result) and `τ_SPY = τ_0050 = 0.55` (grid floor). Sharpe stays 3/3 PASS; cost basis remains the open secondary objective for the next iteration.
