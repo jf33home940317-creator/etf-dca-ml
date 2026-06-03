@@ -3,6 +3,9 @@ import pandas as pd
 from pathlib import Path
 import config
 
+def _cache_path(symbol: str) -> Path:
+    return config.STORAGE_RAW / f"{symbol.replace('^', '').replace('-', '_')}.parquet"
+
 def fetch_symbol(symbol: str, start: str = config.HISTORY_START) -> pd.DataFrame:
     df = yf.download(
         symbol,
@@ -24,13 +27,13 @@ def fetch_symbol(symbol: str, start: str = config.HISTORY_START) -> pd.DataFrame
 
 def fetch_and_cache(symbol: str) -> pd.DataFrame:
     config.STORAGE_RAW.mkdir(parents=True, exist_ok=True)
-    path = config.STORAGE_RAW / f"{symbol.replace('^', '').replace('-', '_')}.parquet"
+    path = _cache_path(symbol)
     df = fetch_symbol(symbol)
     df.to_parquet(path)
     return df
 
 def load_or_fetch(symbol: str) -> pd.DataFrame:
-    path = config.STORAGE_RAW / f"{symbol.replace('^', '').replace('-', '_')}.parquet"
+    path = _cache_path(symbol)
     if path.exists():
         return pd.read_parquet(path)
     return fetch_and_cache(symbol)
