@@ -1,0 +1,16 @@
+# etf-dca-ml — install with: crontab deploy/crontab.txt
+# Assumes VM timezone = Asia/Taipei. If UTC, subtract 8h from each entry.
+PATH=/usr/local/bin:/usr/bin:/bin
+DCA_DISCORD_WEBHOOK=__SET_IN_BASHRC_OR_ENVIRONMENTFILE__
+
+# Monthly retrain — 1st of month, 06:00 TPE
+0 6 1 * * cd $HOME/etf-dca-ml && .venv/bin/python -m live.monthly_retrain >> $HOME/etf-dca-ml/storage/live/retrain.log 2>&1
+
+# Daily predict — 06:30 TPE
+30 6 * * * cd $HOME/etf-dca-ml && .venv/bin/python -m live.predict_daemon >> $HOME/etf-dca-ml/storage/live/predict.log 2>&1
+
+# Daily settle — 07:00 TPE
+0 7 * * * cd $HOME/etf-dca-ml && .venv/bin/python -m live.ledger_settle >> $HOME/etf-dca-ml/storage/live/settle.log 2>&1
+
+# Weekly report — Sunday 23:00 TPE
+0 23 * * 0 cd $HOME/etf-dca-ml && .venv/bin/python -m live.weekly_report >> $HOME/etf-dca-ml/storage/live/weekly.log 2>&1
