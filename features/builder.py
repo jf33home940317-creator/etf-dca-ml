@@ -10,7 +10,7 @@ FEATURE_COLS = [
     "atr_norm", "bb_width20", "rvol20",
     "channel_pos60", "dd_60", "dd_252",
     "vol_norm", "obv_slope",
-    "day_of_month", "day_of_week",
+    "day_of_week",
     "vix", "vix_ma200_ratio", "vix_chg5",
     "tnx", "tnx_slope",
     "dxy", "dxy_chg5", "smh_roc1",

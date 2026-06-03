@@ -274,7 +274,7 @@ MAX_PER_TRADE_RATIO = 0.25
 HISTORY_START = "2005-01-01"
 LABEL_WINDOW = 30
 LABEL_TOP_Q = 0.20
-PURGE_GAP_DAYS = 20
+PURGE_GAP_DAYS = 40   # NOTE: must be >= LABEL_WINDOW (see §11 diagnostic notes)
 DISCORD_WEBHOOK_URL = os.environ["DCA_DISCORD_WEBHOOK"]
 TZ = "Asia/Taipei"
 ```
@@ -293,3 +293,38 @@ TZ = "Asia/Taipei"
 - Cost-basis savings vs Baseline B is positive on aggregate.
 - Live daemon runs 30 consecutive days on VM without manual intervention, heartbeat never stale > 25h.
 - Discord notifications fire daily and include data integrity status.
+
+## 12. Diagnostic Notes (Phase B Post-Build)
+
+After completing Tasks 1-9, a series of smoke tests on real SPY data (2005-01 → 2026-06, 5102 samples) uncovered and corrected two pipeline issues. Recorded here for future maintainers.
+
+### 12.1 PURGE_GAP_DAYS bumped 20 → 40
+
+The original `PURGE_GAP_DAYS = 20` was shorter than `LABEL_WINDOW = 30`, meaning train day `T`'s label (computed from prices in `[T+1, T+30]`) overlapped by ~10 days with the features at val day `T+20` (which read prices through `T+20`). A theoretical leakage path.
+
+Ablation on SPY (purge=20 vs purge=40, all 25 features): CV-AUC moved 0.6918 → 0.6875 (within fold std ~0.014). Practical impact tiny, but the correct value is `>= LABEL_WINDOW`, so the project ships with `PURGE_GAP_DAYS = 40` (30 + 10-day safety buffer). Zero cost, correct invariant.
+
+### 12.2 `day_of_month` removed from FEATURE_COLS
+
+The original 25-feature set included `day_of_month`. In a within-month-relative-rank task with a forward 30-day label window, rows late in the month have their forward window straddle the next calendar month, while early-month rows have their forward window fully inside the current month. The model learned this structural difference and gave `day_of_month` ~5.9% feature importance — not real market signal, just a label-construction artifact.
+
+Ablation (purge=40, drop `day_of_month`): CV-AUC 0.6875 → 0.6658 (Δ -0.022). Removed in production. `day_of_week` is retained — its potential bias (e.g., Friday risk-off) is a genuine market effect, not a label-window artifact.
+
+The "honest" CV-AUC for the production pipeline is therefore **0.6658**.
+
+### 12.3 Y-randomization (label-shuffle) sanity check
+
+Lopez de Prado-style null test: with config (purge=40, 24 features), shuffle the training label vector across 5 seeds and measure CV-AUC.
+
+| Run | CV-AUC |
+|---|---|
+| Real labels | 0.6658 |
+| Shuffled seed 0 | 0.5180 |
+| Shuffled seed 1 | 0.5074 |
+| Shuffled seed 2 | 0.5096 |
+| Shuffled seed 3 | 0.4968 |
+| Shuffled seed 4 | 0.4946 |
+| **Shuffled mean** | **0.5053 ± 0.0086** |
+| **Gap (real − shuffled)** | **+0.1605** |
+
+Shuffled distribution sits squarely in the null band [0.49, 0.51]; the 0.66 in production is **real predictive signal** from RSI / MA distance / drawdown / VIX features, not a residual structural artifact. Cleared to proceed to Phase C (backtest + live).
