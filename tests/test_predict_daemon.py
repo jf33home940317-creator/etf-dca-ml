@@ -1,7 +1,14 @@
+import json
+import tempfile
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 import numpy as np
 import pandas as pd
-from live.predict_daemon import decide_action, _is_calendar_month_last_business_day
+from live.predict_daemon import (
+    decide_action,
+    _is_calendar_month_last_business_day,
+    _already_signalled,
+)
 
 
 class FakeModel:
@@ -62,3 +69,28 @@ def test_calendar_last_bday_true_on_last_friday_when_weekend_follows():
     assert _is_calendar_month_last_business_day(pd.Timestamp("2024-02-29")) is True
     # 2024-05-31 was a Friday — last business day of May (next bday = Mon Jun 3).
     assert _is_calendar_month_last_business_day(pd.Timestamp("2024-05-31")) is True
+
+
+def test_already_signalled_true_when_exists(tmp_path):
+    p = tmp_path / "predictions.jsonl"
+    p.write_text(
+        json.dumps({"symbol": "SPY", "signal_date": "2026-06-05", "status": "FILLED"}) + "\n"
+    )
+    with patch("live.predict_daemon.PREDICTIONS", p):
+        assert _already_signalled("SPY", "2026-06-05") is True
+
+
+def test_already_signalled_false_when_different(tmp_path):
+    p = tmp_path / "predictions.jsonl"
+    p.write_text(
+        json.dumps({"symbol": "SPY", "signal_date": "2026-06-05", "status": "FILLED"}) + "\n"
+    )
+    with patch("live.predict_daemon.PREDICTIONS", p):
+        assert _already_signalled("SPY", "2026-06-06") is False
+        assert _already_signalled("QQQ", "2026-06-05") is False
+
+
+def test_already_signalled_false_when_no_file(tmp_path):
+    p = tmp_path / "nonexistent.jsonl"
+    with patch("live.predict_daemon.PREDICTIONS", p):
+        assert _already_signalled("SPY", "2026-06-05") is False

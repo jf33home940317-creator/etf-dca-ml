@@ -79,9 +79,27 @@ def _is_calendar_month_last_business_day(today: pd.Timestamp) -> bool:
     return (today + BDay(1)).month != today.month
 
 
+def _already_signalled(symbol: str, signal_date: str) -> bool:
+    """Check if a signal already exists for (symbol, signal_date)."""
+    from live.ledger import read_signals
+    for s in read_signals(PREDICTIONS):
+        if s.get("symbol") == symbol and s.get("signal_date") == signal_date:
+            return True
+    return False
+
+
 def run_once():
     today_utc = datetime.now(timezone.utc).date()
     print(f"[predict_daemon] starting {today_utc.isoformat()}")
+
+    # Skip UTC weekends — no new market data available for any symbol.
+    # Cron 06:30 TPE = 22:30 UTC (prev day), so:
+    #   TPE Sun 06:30 → UTC Sat 22:30 (dayofweek=5)
+    #   TPE Mon 06:30 → UTC Sun 22:30 (dayofweek=6)
+    # On both, yfinance returns Friday's stale data → duplicate signals.
+    if today_utc.weekday() >= 5:
+        print(f"[predict_daemon] UTC weekend ({today_utc.strftime('%A')}), skipping")
+        return
 
     macro_raw = {
         "VIX": _fetch_with_retry("^VIX"),
@@ -126,9 +144,21 @@ def run_once():
             )
 
             if action:
+                sig_date = str(today_idx.date())
+                # Dedup: skip if we already issued a signal for this
+                # (symbol, signal_date).  Prevents duplicates when cron
+                # runs on a day where yfinance still returns stale data
+                # (e.g. US holidays).
+                if _already_signalled(symbol, sig_date):
+                    lines.append(
+                        f"⏭️ {symbol:<8} 機率={prob:.2f} "
+                        f"已有 {sig_date} 訊號，跳過"
+                    )
+                    continue
+
                 append_signal(PREDICTIONS, {
                     "issued_at": datetime.now(timezone.utc).isoformat(),
-                    "signal_date": str(today_idx.date()),
+                    "signal_date": sig_date,
                     "symbol": symbol, "reason": action["reason"],
                     "prob": prob, "amount": action["amount"],
                     "fill_price": None, "status": "PENDING",
